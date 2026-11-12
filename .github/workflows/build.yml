@@ -1,8 +1,10 @@
 name: Build
 
+# Runs when a release is published on GitHub (Releases → Draft a new release → tag v1.0.0 →
+# Publish); the APK and its checksum are attached to that release. Can also be run by hand.
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -40,7 +42,7 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: ${{ github.ref_type == 'tag' && github.ref_name || format('0.0.{0}', github.run_number) }}
+          VERSION_NAME: ${{ github.event.release.tag_name || format('0.0.{0}', github.run_number) }}
         run: gradle --no-daemon :app:assembleRelease
 
       - name: Name it and record its checksum
@@ -55,10 +57,9 @@ jobs:
             ambient-home.apk
             ambient-home.apk.sha256
 
-      - name: Publish a release (tags only)
-        if: github.ref_type == 'tag'
+      - name: Attach the APK to the release
+        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" ambient-home.apk ambient-home.apk.sha256 \
-            --title "$GITHUB_REF_NAME" --notes "Built by GitHub Actions from tag $GITHUB_REF_NAME."
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" ambient-home.apk ambient-home.apk.sha256 --clobber -R "$GITHUB_REPOSITORY"

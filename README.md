@@ -54,5 +54,11 @@ bash undo.sh <fire-tv-ip>
 
 ## Build
 
-GitHub Actions builds `ambient-home.apk` on every `v*` tag and attaches it, with its SHA-256,
-to a release. Locally: `gradle :app:assembleRelease` (JDK 17, Android SDK 34).
+Publishing a release on GitHub (for example tag `v1.0.0`) runs GitHub Actions, which builds
+`ambient-home.apk` and attaches it, with its SHA-256, to that release. Locally:
+`gradle :app:assembleRelease` (JDK 17, Android SDK 34).
+
+Signing: add the repository secrets `SIGNING_KEYSTORE_B64`, `SIGNING_STORE_PASSWORD`,
+`SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD` to sign every build with the same key, so
+updates install over the top. Without them each build uses a throwaway key and `install.sh`
+reinstalls the app (and re-copies the photos) on update.
