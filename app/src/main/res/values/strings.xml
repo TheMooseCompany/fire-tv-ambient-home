@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ambient Home</string>
+    <string name="guard_label">Ambient Home: Home button</string>
+    <string name="guard_description">Brings Ambient Home back when Amazon\'s home screen opens. It only watches Amazon\'s launcher and cannot read anything on screen.</string>
+</resources>

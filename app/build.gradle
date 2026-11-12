@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.themoosecompany.ambienthome'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.themoosecompany.ambienthome'
+        // Fire OS 6 is API 25; Fire OS 8 (Fire TV Stick 4K 2nd gen) is API 30.
+        minSdk 25
+        targetSdk 30
+        versionCode((System.getenv('VERSION_CODE') ?: '1') as int)
+        versionName(System.getenv('VERSION_NAME') ?: '1.0.0')
+    }
+
+    signingConfigs {
+        release {
+            // Filled in by the GitHub build from repository secrets; the key never lives in the repo.
+            def ks = System.getenv('SIGNING_KEYSTORE')
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv('SIGNING_STORE_PASSWORD')
+                keyAlias System.getenv('SIGNING_KEY_ALIAS')
+                keyPassword System.getenv('SIGNING_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig System.getenv('SIGNING_KEYSTORE') ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        // targetSdk 30 matches Fire OS 8; Play Store target rules don't apply to a sideloaded TV app.
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
