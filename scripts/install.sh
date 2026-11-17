@@ -15,7 +15,7 @@ PKG=com.themoosecompany.ambienthome
 REPO=TheMooseCompany/fire-tv-ambient-home
 SERVICE="$PKG/$PKG.HomeGuardService"
 APPS="${APPS:-YouTube,Netflix,Prime Video,Stremio}"
-ROTATE_MINUTES="${ROTATE_MINUTES:-10}"
+ROTATE_SECONDS="${ROTATE_SECONDS:-10}"   # how long each photo stays up (minimum 5)
 OS=$(uname -s)
 
 TV="${1:-}"
@@ -155,7 +155,7 @@ if [ -n "$src" ] && $SUDO test -d "$src"; then
 else
   echo "No 'ambient-wallpapers' folder or zip found, so no photos copied (the background stays dark grey)."
 fi
-printf 'apps=%s\nrotate_minutes=%s\nshuffle=false\n' "$APPS" "$ROTATE_MINUTES" > "$tmp/home.properties"
+printf 'apps=%s\nrotate_seconds=%s\nshuffle=false\n' "$APPS" "$ROTATE_SECONDS" > "$tmp/home.properties"
 A push "$tmp/home.properties" "$dest/home.properties" >/dev/null
 
 # --------------------------------------------------------------------- home guard

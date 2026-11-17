@@ -39,12 +39,13 @@ ADB debugging off again: network adb is unencrypted.
 
 ```
 apps=YouTube,Netflix,Prime Video,Stremio
-rotate_minutes=10
+# how long each photo stays up: rotate_seconds (minimum 5) or rotate_minutes
+rotate_seconds=10
 shuffle=false
 ```
 
 Apps are matched by the name shown on the TV. Run `install.sh` again to change them
-(`APPS="..." ROTATE_MINUTES=5 bash install.sh <ip>`).
+(`APPS="..." ROTATE_SECONDS=30 bash install.sh <ip>`).
 
 ## Undo
 
