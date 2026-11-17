@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Installs Ambient Home on an Amazon Fire TV (Fire OS) over adb, from any Linux machine on
-# the same Wi-Fi. Written for the built-in Terminal on an Umbrel Raspberry Pi.
+# Installs Ambient Home on an Amazon Fire TV (Fire OS) over adb, from a Mac or a Linux
+# machine on the same Wi-Fi (for example the Umbrel terminal on a Raspberry Pi).
 #
-#   bash install.sh <fire-tv-ip> [wallpaper-folder]
+#   bash install.sh <fire-tv-ip> [wallpaper-folder-or-zip]
 #
-# Wallpapers: put your 1920x1080 JPEGs in a folder named "ambient-wallpapers", or upload
-# ambient-wallpapers.zip (for example with Umbrel's Files app), and the script finds it.
-# Or pass the folder as the second argument.
+# Wallpapers: 1920x1080 JPEGs in a folder named "ambient-wallpapers" or a zip named
+# ambient-wallpapers.zip. On a Mac the script looks in Downloads, Desktop and Documents;
+# on Linux under /home, /mnt and /media. Or pass the folder or zip as the second argument.
 # Undo everything with: bash undo.sh <fire-tv-ip>
+# Written for macOS's bash 3.2 as well as Linux.
 set -euo pipefail
 
 PKG=com.themoosecompany.ambienthome
@@ -15,35 +16,57 @@ REPO=TheMooseCompany/fire-tv-ambient-home
 SERVICE="$PKG/$PKG.HomeGuardService"
 APPS="${APPS:-YouTube,Netflix,Prime Video,Stremio}"
 ROTATE_MINUTES="${ROTATE_MINUTES:-10}"
+OS=$(uname -s)
 
 TV="${1:-}"
 if [ -z "$TV" ]; then
-  echo "Usage: bash install.sh <fire-tv-ip> [wallpaper-folder]"
+  echo "Usage: bash install.sh <fire-tv-ip> [wallpaper-folder-or-zip]"
   exit 1
 fi
 TARGET="$TV:5555"
 say() { printf '\n==> %s\n' "$*"; }
-A() { adb -s "$TARGET" "$@"; }
 
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# --------------------------------------------------------------------- adb
 say "Checking for adb"
-if ! command -v adb >/dev/null 2>&1; then
+ADB=""
+if command -v adb >/dev/null 2>&1; then
+  ADB=$(command -v adb)
+elif [ "$OS" = Darwin ]; then
+  tools="$HOME/.ambient-home/platform-tools"
+  if [ ! -x "$tools/adb" ]; then
+    echo "Downloading Google's Android platform tools (adb) into ~/.ambient-home"
+    mkdir -p "$HOME/.ambient-home"
+    curl -fsSL -o "$tmp/pt.zip" https://dl.google.com/android/repository/platform-tools-latest-darwin.zip
+    rm -rf "$tools"
+    unzip -q "$tmp/pt.zip" -d "$HOME/.ambient-home"
+  fi
+  ADB="$tools/adb"
+else
   echo "Installing adb (Umbrel removes it again on restart, which is fine)."
   sudo apt-get update -qq
   sudo apt-get install -y -qq adb
+  ADB=$(command -v adb)
 fi
+"$ADB" version | head -n 1
+A() { "$ADB" -s "$TARGET" "$@"; }
 
+# --------------------------------------------------------------------- connect
 say "Connecting to the Fire TV at $TARGET"
-adb connect "$TARGET" >/dev/null 2>&1 || true
+"$ADB" connect "$TARGET" >/dev/null 2>&1 || true
 for i in $(seq 1 45); do
-  [ "$(adb -s "$TARGET" get-state 2>/dev/null || true)" = device ] && break
+  [ "$("$ADB" -s "$TARGET" get-state 2>/dev/null || true)" = device ] && break
   if [ "$i" = 1 ]; then
-    echo "If the TV asks 'Allow USB debugging?', tick 'Always allow from this computer' and choose OK."
+    echo "Look at the TV: if it asks 'Allow USB debugging?', tick 'Always allow from this computer' and choose OK."
   fi
   sleep 2
-  adb connect "$TARGET" >/dev/null 2>&1 || true
+  "$ADB" connect "$TARGET" >/dev/null 2>&1 || true
 done
-if [ "$(adb -s "$TARGET" get-state 2>/dev/null || true)" != device ]; then
-  echo "Couldn't connect. Check that ADB debugging is on and that $TV is the TV's IP address."
+if [ "$("$ADB" -s "$TARGET" get-state 2>/dev/null || true)" != device ]; then
+  echo "Couldn't connect. Check that ADB debugging is on and that $TV is the TV's IP address"
+  echo "(Settings > My Fire TV > About > Network), then run this again."
   exit 1
 fi
 
@@ -56,14 +79,16 @@ if [ "$maker" != Amazon ]; then
   exit 1
 fi
 
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
-
+# --------------------------------------------------------------------- app
 say "Downloading the latest Ambient Home and checking it"
 base="https://github.com/$REPO/releases/latest/download"
 curl -fsSL -o "$tmp/ambient-home.apk" "$base/ambient-home.apk"
 curl -fsSL -o "$tmp/ambient-home.apk.sha256" "$base/ambient-home.apk.sha256"
-(cd "$tmp" && sha256sum -c ambient-home.apk.sha256)
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$tmp" && sha256sum -c ambient-home.apk.sha256)
+else
+  (cd "$tmp" && shasum -a 256 -c ambient-home.apk.sha256)
+fi
 
 say "Installing the app"
 if ! out=$(A install -r "$tmp/ambient-home.apk" 2>&1); then
@@ -76,47 +101,63 @@ if ! out=$(A install -r "$tmp/ambient-home.apk" 2>&1); then
     exit 1
   fi
 fi
+echo "Installed."
 
+# --------------------------------------------------------------------- wallpapers
 say "Copying wallpapers and settings"
-dest="/sdcard/Android/data/$PKG/files"
-A shell mkdir -p "$dest/wallpapers"
+if [ "$OS" = Darwin ]; then
+  SUDO=""
+  search_dirs="$HOME/Downloads $HOME/Desktop $HOME/Documents"
+else
+  SUDO="sudo"
+  search_dirs="/home /mnt /media"
+fi
+
+# One folder at a time, so a Mac only asks for access to the folders it actually searches.
+find_wallpapers() {
+  for d in $search_dirs; do
+    [ -d "$d" ] || continue
+    r=$($SUDO find "$d" -maxdepth 6 \( -type d -name ambient-wallpapers \) -o \( -type f -name 'ambient-wallpapers*.zip' \) 2>/dev/null | head -n 1 || true)
+    if [ -n "$r" ]; then
+      echo "$r"
+      return 0
+    fi
+  done
+}
 src="${2:-}"
 if [ -z "$src" ]; then
-  src=$(sudo find /home /mnt /media -maxdepth 8 -type d -name ambient-wallpapers 2>/dev/null | head -n 1 || true)
+  src=$(find_wallpapers)
 fi
-if [ -z "$src" ]; then
-  # Or a zip of them (easier to upload from a phone): ambient-wallpapers.zip
-  zip=$(sudo find /home /mnt /media -maxdepth 8 -type f -name 'ambient-wallpapers*.zip' 2>/dev/null | head -n 1 || true)
-  if [ -n "$zip" ]; then
-    echo "Unpacking $zip"
-    sudo cp "$zip" "$tmp/w.zip"
-    sudo chown "$(id -u):$(id -g)" "$tmp/w.zip"
+case "$src" in
+  *.zip)
+    echo "Unpacking $src"
+    $SUDO cp "$src" "$tmp/w.zip"
+    [ -n "$SUDO" ] && sudo chown "$(id -u):$(id -g)" "$tmp/w.zip"
     mkdir -p "$tmp/unzipped"
-    if command -v unzip >/dev/null 2>&1; then
-      unzip -q "$tmp/w.zip" -d "$tmp/unzipped"
-    elif command -v python3 >/dev/null 2>&1; then
-      python3 -m zipfile -e "$tmp/w.zip" "$tmp/unzipped"
-    else
-      sudo apt-get install -y -qq unzip
-      unzip -q "$tmp/w.zip" -d "$tmp/unzipped"
-    fi
-    src=$(find "$tmp/unzipped" -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) -printf '%h\n' | head -n 1)
-  fi
-fi
-if [ -n "$src" ] && sudo test -d "$src"; then
+    unzip -q "$tmp/w.zip" -d "$tmp/unzipped"
+    first=$(find "$tmp/unzipped" -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) | head -n 1)
+    src=""
+    [ -n "$first" ] && src=$(dirname "$first")
+    ;;
+esac
+
+dest="/sdcard/Android/data/$PKG/files"
+A shell mkdir -p "$dest/wallpapers"
+if [ -n "$src" ] && $SUDO test -d "$src"; then
   mkdir -p "$tmp/w"
-  sudo find "$src" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) -exec cp {} "$tmp/w/" \;
-  sudo chown -R "$(id -u):$(id -g)" "$tmp/w"
-  count=$(find "$tmp/w" -type f | wc -l)
+  $SUDO find "$src" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) -exec cp {} "$tmp/w/" \;
+  [ -n "$SUDO" ] && sudo chown -R "$(id -u):$(id -g)" "$tmp/w"
+  count=$(find "$tmp/w" -type f | wc -l | tr -d ' ')
   echo "Found $count photos in $src"
   A shell "rm -f $dest/wallpapers/*"
   A push "$tmp/w/." "$dest/wallpapers/" >/dev/null
 else
-  echo "No 'ambient-wallpapers' folder found, so no photos copied (the background stays dark grey)."
+  echo "No 'ambient-wallpapers' folder or zip found, so no photos copied (the background stays dark grey)."
 fi
 printf 'apps=%s\nrotate_minutes=%s\nshuffle=false\n' "$APPS" "$ROTATE_MINUTES" > "$tmp/home.properties"
 A push "$tmp/home.properties" "$dest/home.properties" >/dev/null
 
+# --------------------------------------------------------------------- home guard
 say "Turning on the Home button guard"
 current=$(A shell settings get secure enabled_accessibility_services | tr -d '\r')
 case "$current" in
@@ -127,11 +168,12 @@ esac
 A shell settings put secure enabled_accessibility_services "$wanted"
 A shell settings put secure accessibility_enabled 1
 
+# --------------------------------------------------------------------- open it
 say "Opening Ambient Home"
 A logcat -c >/dev/null 2>&1 || true
 A shell am start -n "$PKG/.HomeActivity" >/dev/null
 sleep 4
-missing=$(A logcat -d -s AmbientHome:W 2>/dev/null | grep "app not found" | sed 's/.*app not found on this TV: //' | sort -u || true)
+missing=$(A logcat -d -s AmbientHome:W 2>/dev/null | grep "app not found" | sed 's/.*app not found on this TV: //' | tr -d '\r' | sort -u || true)
 if [ -n "$missing" ]; then
   echo "These apps weren't found on the TV, so they're not in the row:"
   echo "$missing"
