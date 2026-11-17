@@ -485,15 +485,18 @@ public class HomeActivity extends Activity {
 
     private void loadPhotos() {
         photos.clear();
-        File[] files = Config.wallpaperDir(this).listFiles();
-        if (files != null) {
+        for (File dir : Config.wallpaperDirs(this)) {
+            File[] files = dir.listFiles();
+            if (files == null) continue;
             for (File f : files) {
                 String n = f.getName().toLowerCase(Locale.ROOT);
                 if (f.isFile() && (n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp"))) {
                     photos.add(f);
                 }
             }
+            if (!photos.isEmpty()) break; // use the first folder that has photos
         }
+        Log.i(TAG, "wallpapers found: " + photos.size());
         Collections.sort(photos);
         if (config.shuffle) Collections.shuffle(photos);
     }

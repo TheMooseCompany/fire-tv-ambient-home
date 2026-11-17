@@ -141,7 +141,8 @@ case "$src" in
     ;;
 esac
 
-dest="/sdcard/Android/data/$PKG/files"
+# Fire OS 8 (Android 11) closes /sdcard/Android/data/<app> to adb; the app's media folder stays open.
+dest="/sdcard/Android/media/$PKG"
 A shell mkdir -p "$dest/wallpapers"
 if [ -n "$src" ] && $SUDO test -d "$src"; then
   mkdir -p "$tmp/w"

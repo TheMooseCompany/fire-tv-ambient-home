@@ -13,15 +13,17 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * Settings live in a plain text file in the app's own folder on the TV:
- * /sdcard/Android/data/com.themoosecompany.ambienthome/files/home.properties
+ * Settings live in a plain text file in the app's media folder on the TV:
+ * /sdcard/Android/media/com.themoosecompany.ambienthome/home.properties
  *
  *   apps=YouTube,Netflix,Prime Video,Stremio
  *   rotate_minutes=10
  *   shuffle=false
  *
- * Wallpapers go in the "wallpapers" folder next to it. Both are copied there over adb;
- * the app itself needs no storage permission to read its own folder.
+ * Wallpapers go in the "wallpapers" folder next to it. On Fire OS 8 (Android 11)
+ * /sdcard/Android/data/<app> is closed to adb, but the media folder is not, so the install
+ * script copies both there. The app needs no storage permission to read its own folders.
+ * The older files folder (/sdcard/Android/data/.../files) is still read as a fallback.
  */
 final class Config {
     static final String[] DEFAULT_APPS = {"YouTube", "Netflix", "Prime Video", "Stremio"};
@@ -30,24 +32,42 @@ final class Config {
     long rotateMillis = 10 * 60_000L;
     boolean shuffle = false;
 
-    static File dir(Context c) {
-        File d = c.getExternalFilesDir(null);
-        return d != null ? d : c.getFilesDir();
+    /** Folders to look in, in order: media folder first, then the app's external and internal files. */
+    @SuppressWarnings("deprecation")
+    static List<File> dirs(Context c) {
+        List<File> out = new ArrayList<>();
+        File[] media = c.getExternalMediaDirs();
+        if (media != null) {
+            for (File m : media) {
+                if (m != null) {
+                    out.add(m);
+                    break;
+                }
+            }
+        }
+        File external = c.getExternalFilesDir(null);
+        if (external != null) out.add(external);
+        out.add(c.getFilesDir());
+        return out;
     }
 
-    static File wallpaperDir(Context c) {
-        return new File(dir(c), "wallpapers");
+    static List<File> wallpaperDirs(Context c) {
+        List<File> out = new ArrayList<>();
+        for (File d : dirs(c)) out.add(new File(d, "wallpapers"));
+        return out;
     }
 
     static Config load(Context c) {
         Config cfg = new Config();
         Properties p = new Properties();
-        File f = new File(dir(c), "home.properties");
-        if (f.isFile()) {
+        for (File d : dirs(c)) {
+            File f = new File(d, "home.properties");
+            if (!f.isFile()) continue;
             try (InputStream in = new FileInputStream(f)) {
                 p.load(new InputStreamReader(in, "UTF-8"));
+                break;
             } catch (IOException ignored) {
-                // Fall back to the defaults below.
+                // Try the next folder, then fall back to the defaults below.
             }
         }
 

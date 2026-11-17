@@ -34,7 +34,8 @@ ADB debugging off again: network adb is unencrypted.
 
 ## Settings
 
-`/sdcard/Android/data/com.themoosecompany.ambienthome/files/home.properties` on the TV:
+`/sdcard/Android/media/com.themoosecompany.ambienthome/home.properties` on the TV (Fire OS 8 closes
+`/sdcard/Android/data/<app>` to adb, so photos and settings live in the media folder):
 
 ```
 apps=YouTube,Netflix,Prime Video,Stremio

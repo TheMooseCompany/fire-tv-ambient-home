@@ -46,6 +46,7 @@ else
   A shell settings put secure enabled_accessibility_services "$remaining"
 fi
 A uninstall "$PKG" >/dev/null 2>&1 || true
+A shell rm -rf "/sdcard/Android/media/$PKG" >/dev/null 2>&1 || true
 A shell input keyevent KEYCODE_HOME
 echo "Ambient Home is removed and Amazon's home screen is back."
 echo "Turn ADB debugging off when you're done: Settings > My Fire TV > Developer Options."
