@@ -174,12 +174,17 @@ say "Opening Ambient Home"
 A logcat -c >/dev/null 2>&1 || true
 A shell am start -n "$PKG/.HomeActivity" >/dev/null
 sleep 4
-missing=$(A logcat -d -s AmbientHome:W 2>/dev/null | grep "app not found" | sed 's/.*app not found on this TV: //' | tr -d '\r' | sort -u || true)
+log=$(A logcat -d -s AmbientHome:I 2>/dev/null | tr -d '\r' || true)
+missing=$(printf '%s\n' "$log" | grep "app not found" | sed 's/.*app not found on this TV: //' | sort -u || true)
 if [ -n "$missing" ]; then
   echo "These apps weren't found on the TV, so they're not in the row:"
   echo "$missing"
 else
   echo "All apps in the row were found."
+fi
+seen=$(printf '%s\n' "$log" | grep "wallpapers found" | tail -n 1 | sed 's/.*wallpapers found: //' || true)
+if [ -n "$seen" ]; then
+  echo "The TV can see $seen photos."
 fi
 
 say "Done"
