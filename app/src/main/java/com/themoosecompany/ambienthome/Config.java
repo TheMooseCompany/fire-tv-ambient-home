@@ -19,6 +19,8 @@ import java.util.Properties;
  *   apps=YouTube,Netflix,Prime Video,Stremio
  *   rotate_minutes=10
  *   shuffle=false
+ *   motion=true          slow zoom on each photo
+ *   idle_seconds=20      hide the apps and buttons after this long without the remote (0 = never)
  *
  * Wallpapers go in the "wallpapers" folder next to it. On Fire OS 8 (Android 11)
  * /sdcard/Android/data/<app> is closed to adb, but the media folder is not, so the install
@@ -31,6 +33,8 @@ final class Config {
     final List<String> apps = new ArrayList<>();
     long rotateMillis = 10 * 60_000L;
     boolean shuffle = false;
+    boolean motion = true;
+    long idleMillis = 20_000L;
 
     /** Folders to look in, in order: media folder first, then the app's external and internal files. */
     @SuppressWarnings("deprecation")
@@ -96,6 +100,13 @@ final class Config {
             }
         }
         cfg.shuffle = "true".equalsIgnoreCase(p.getProperty("shuffle", "false").trim());
+        cfg.motion = !"false".equalsIgnoreCase(p.getProperty("motion", "true").trim());
+        try {
+            int idle = Integer.parseInt(p.getProperty("idle_seconds", "20").trim());
+            if (idle == 0) cfg.idleMillis = 0;
+            else if (idle >= 5) cfg.idleMillis = idle * 1000L;
+        } catch (NumberFormatException ignored) {
+        }
         return cfg;
     }
 }

@@ -4,8 +4,8 @@
 #
 #   bash install.sh <fire-tv-ip> [wallpaper-folder-or-zip]
 #
-# Wallpapers: 1920x1080 JPEGs in a folder named "ambient-wallpapers" or a zip named
-# ambient-wallpapers.zip. On a Mac the script looks in Downloads, Desktop and Documents;
+# Wallpapers: 1920x1080 JPEGs in a folder or zip whose name starts with "ambient-wallpapers"
+# (the newest one wins). On a Mac the script looks in Downloads, Desktop and Documents;
 # on Linux under /home, /mnt and /media. Or pass the folder or zip as the second argument.
 # Undo everything with: bash undo.sh <fire-tv-ip>
 # Written for macOS's bash 3.2 as well as Linux.
@@ -16,6 +16,8 @@ REPO=TheMooseCompany/fire-tv-ambient-home
 SERVICE="$PKG/$PKG.HomeGuardService"
 APPS="${APPS:-YouTube,Netflix,Prime Video,Stremio}"
 ROTATE_SECONDS="${ROTATE_SECONDS:-10}"   # how long each photo stays up (minimum 5)
+MOTION="${MOTION:-true}"                 # slow zoom on each photo
+IDLE_SECONDS="${IDLE_SECONDS:-20}"       # hide the apps and buttons after this long without the remote (0 = never)
 OS=$(uname -s)
 
 TV="${1:-}"
@@ -114,17 +116,26 @@ else
 fi
 
 # One folder at a time, so a Mac only asks for access to the folders it actually searches.
+# Within the first folder that has any, the most recently changed folder or zip wins.
 find_wallpapers() {
   for d in $search_dirs; do
     [ -d "$d" ] || continue
-    r=$($SUDO find "$d" -maxdepth 6 \( -type d -name ambient-wallpapers \) -o \( -type f -name 'ambient-wallpapers*.zip' \) 2>/dev/null | head -n 1 || true)
-    if [ -n "$r" ]; then
-      echo "$r"
+    best=""
+    while IFS= read -r r; do
+      [ -n "$r" ] || continue
+      if [ -z "$best" ] || [ "$r" -nt "$best" ]; then best="$r"; fi
+    done < <($SUDO find "$d" -maxdepth 6 \( -type d -name 'ambient-wallpapers*' \) -o \( -type f -name 'ambient-wallpapers*.zip' \) 2>/dev/null || true)
+    if [ -n "$best" ]; then
+      echo "$best"
       return 0
     fi
   done
 }
 src="${2:-}"
+# A browser may have unzipped the download already: use the folder it made.
+if [ -n "$src" ] && [ ! -e "$src" ] && [ -d "${src%.zip}" ]; then
+  src="${src%.zip}"
+fi
 if [ -z "$src" ]; then
   src=$(find_wallpapers)
 fi
@@ -155,7 +166,8 @@ if [ -n "$src" ] && $SUDO test -d "$src"; then
 else
   echo "No 'ambient-wallpapers' folder or zip found, so no photos copied (the background stays dark grey)."
 fi
-printf 'apps=%s\nrotate_seconds=%s\nshuffle=false\n' "$APPS" "$ROTATE_SECONDS" > "$tmp/home.properties"
+printf 'apps=%s\nrotate_seconds=%s\nshuffle=false\nmotion=%s\nidle_seconds=%s\n' \
+  "$APPS" "$ROTATE_SECONDS" "$MOTION" "$IDLE_SECONDS" > "$tmp/home.properties"
 A push "$tmp/home.properties" "$dest/home.properties" >/dev/null
 
 # --------------------------------------------------------------------- home guard
@@ -185,6 +197,17 @@ fi
 seen=$(printf '%s\n' "$log" | grep "wallpapers found" | tail -n 1 | sed 's/.*wallpapers found: //' || true)
 if [ -n "$seen" ]; then
   echo "The TV can see $seen photos."
+fi
+logos=$(printf '%s\n' "$log" | grep "logo: " | sed 's/.*logo: //' | awk '!seen[$0]++' || true)
+if [ -n "$logos" ]; then
+  echo "App logos (banner = the app's own TV logo; icon = its icon on a card in the app's colour):"
+  printf '%s\n' "$logos" | sed 's/^/  /'
+fi
+if [ "$OS" = Darwin ]; then shot="$HOME/Downloads/ambient-home-screen.png"; else shot="$PWD/ambient-home-screen.png"; fi
+if A exec-out screencap -p > "$shot" 2>/dev/null && [ -s "$shot" ]; then
+  echo "Saved a screenshot of the TV to $shot"
+else
+  rm -f "$shot"
 fi
 
 say "Done"

@@ -1,8 +1,13 @@
 # Ambient Home for Fire TV
 
-A calm home screen for Amazon Fire TV sticks running Fire OS: your own photos rotate in the
-background, with a large clock, one row of apps, and Wi-Fi, Bluetooth and Settings buttons.
-No ads, no recommendation rows, and no root.
+A calm home screen for Amazon Fire TV sticks running Fire OS: your own photos fill the screen
+and slowly zoom as they rotate, with a large clock, one row of app cards, and Wi-Fi, Bluetooth
+and Settings buttons. After 20 seconds without the remote the apps and buttons fade away,
+leaving the photo and the clock. No ads, no recommendation rows, and no root.
+
+- **Real app logos, nothing bundled.** Each card shows the app's own 16:9 TV banner, read from
+  the app on the TV. An app without a banner gets its icon and name on a card tinted with the
+  icon's colour. No brand artwork lives in this app or this repo.
 
 - **No permissions.** The app has no internet access and no storage permission. It reads
   photos and settings from its own folder on the TV.
@@ -21,7 +26,8 @@ Stick 4K): they can't install Android apps.
 1. On the Fire TV: **Settings → My Fire TV → About**, press OK on the device name 7 times,
    then **Developer Options → ADB debugging: On**. The IP address is under
    **About → Network**.
-2. Put your wallpapers (1920×1080 JPEGs) in a folder named `ambient-wallpapers`.
+2. Put your wallpapers (1920×1080 JPEGs, already cropped to 16:9) in a folder or zip whose name
+   starts with `ambient-wallpapers`. If there are several, the newest is used.
 3. Run:
 
 ```sh
@@ -42,10 +48,16 @@ apps=YouTube,Netflix,Prime Video,Stremio
 # how long each photo stays up: rotate_seconds (minimum 5) or rotate_minutes
 rotate_seconds=10
 shuffle=false
+# slow zoom on each photo
+motion=true
+# hide the apps and buttons after this long without the remote (0 = never)
+idle_seconds=20
 ```
 
 Apps are matched by the name shown on the TV. Run `install.sh` again to change them
-(`APPS="..." ROTATE_SECONDS=30 bash install.sh <ip>`).
+(`APPS="..." ROTATE_SECONDS=30 MOTION=false IDLE_SECONDS=0 bash install.sh <ip>`). The script
+lists which apps showed their own TV banner and saves a screenshot of the TV
+(`~/Downloads/ambient-home-screen.png` on a Mac).
 
 ## Undo
 
